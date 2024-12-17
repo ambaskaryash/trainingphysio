@@ -1,0 +1,28 @@
+import { NextResponse } from "next/server";
+import fs from "fs/promises";
+import path from "path";
+
+export async function GET() {
+  try { 
+    // 1. Get the directory where your videos are stored
+    const videosDirectory = path.join(process.cwd(), "resources/videos");
+
+    // 2. Read the filenames of the videos in the directory
+    const videoFiles = await fs.readdir(videosDirectory);
+
+    // 3. Construct the video data with URLs
+    const videos = videoFiles.map((videoFile) => ({
+      id: videoFile, // You might want to generate unique IDs here
+      title: videoFile, // You might want to extract the title from the filename
+      url: `/resources/videos/${videoFile}`, // Construct the URL for each video
+    }));
+
+    return NextResponse.json(videos);
+  } catch (error) {
+    console.error("Error fetching videos:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 },
+    );
+  }
+}

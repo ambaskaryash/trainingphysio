@@ -1,15 +1,9 @@
+// pages/api/videos.js
 import { prisma } from "@/lib/prisma";
 import { getAuth } from "@clerk/nextjs/server";
-import { google } from "googleapis";
+import fs from "fs/promises";
 import { NextRequest, NextResponse } from "next/server";
-
-// Configure Google Drive API
-const auth = new google.auth.GoogleAuth({
-  credentials: JSON.parse(process.env.GOOGLE_DRIVE_CREDENTIALS || '{}'), // Parse credentials from env
-  scopes: ["https://www.googleapis.com/auth/drive.readonly"],
-});
-
-const drive = google.drive({ version: "v3", auth });
+import path from "path";
 
 export async function GET(req: NextRequest) {
   const { userId } = getAuth(req);
@@ -38,17 +32,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Get active subscriptions
     const activeSubscriptions = user.subscriptions.filter(
       (sub) => sub.active && sub.endDate > new Date(),
     );
 
-    // Get all category IDs from active subscriptions
     const categoryIds = activeSubscriptions.flatMap(
       (sub) => sub.plan.categories.map((cat) => cat.id),
     );
 
-    // Get videos from subscribed categories
     const videos = await prisma.video.findMany({
       where: {
         categoryId: {
@@ -60,37 +51,36 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Fetch Google Drive URLs for each video (using env variable)
-    const videosWithDriveUrls = await Promise.all(
+    const videosWithLocalUrls = await Promise.all(
       videos.map(async (video) => {
-        const fileId = video.url;
-
+        const videoPath = path.join(
+          process.env.VIDEO_STORAGE_PATH || "public/videos",
+          video.url,
+        );
         try {
-          // Get the webContentLink (view URL) from Google Drive
-          const res = await drive.files.get({
-            fileId: fileId,
-            fields: "webContentLink",
-          });
-
-          const url = res.data.webContentLink;
+          await fs.access(videoPath);
+          const url = `/videos/${video.url}`;
           return { ...video, url };
         } catch (error) {
-          console.error(`Error fetching URL for file ${fileId}:`, error);
-          return { ...video, url: null }; // Or handle the error as needed
+          console.error(`Error accessing video file ${video.url}:`, error);
+          return { ...video, url: null };
         }
       }),
     );
 
-    return NextResponse.json(videosWithDriveUrls);
+    return NextResponse.json(videosWithLocalUrls);
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 },
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId } = getAuth(req); // Use getAuth(req) here as well
+    const { userId } = getAuth(req);
 
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -119,6 +109,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(video);
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 },
+    );
   }
 }

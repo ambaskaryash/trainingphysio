@@ -1,5 +1,5 @@
 import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/nextjs';
-//import { authOptions } from './api/auth/[...nextauth]';
+import { authOptions } from './api/auth/[...nextauth]';
 import { getServerSession } from 'next-auth/next';
 import type { Session } from 'next-auth';
 import { useRouter } from 'next/router';
